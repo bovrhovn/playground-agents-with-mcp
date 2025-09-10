@@ -33,13 +33,25 @@ var smsSendToolName = "SmsSendTool";
 var transport = new SseClientTransport(new SseClientTransportOptions
 {
     Name = smsSendToolName,
-    Endpoint = new Uri(apiBaseUrl)
+    Endpoint = new Uri(apiBaseUrl),
+    AdditionalHeaders =
+        new Dictionary<string, string>
+        {
+            { "Authorization", $"App {apiKey}" }
+        }
 });
 
 var mcpClient = await McpClientFactory.CreateAsync(transport);
 var tools = await mcpClient.ListToolsAsync();
 var builder = Kernel.CreateBuilder();
-var defaultAzureCreds = new DefaultAzureCredential();
+var defaultAzureCreds = new DefaultAzureCredential(
+    new DefaultAzureCredentialOptions
+    {
+        ExcludeAzureCliCredential = false,
+        ExcludeEnvironmentCredential = true,
+        ExcludeManagedIdentityCredential = true,
+        ExcludeVisualStudioCredential = true
+    });
 builder.AddAzureOpenAIChatCompletion(deploymentName, azureOpenAIBaseUrl, defaultAzureCreds);
 var kernel = builder.Build();
 var kernelFunctions = tools.Select(tool => tool.AsKernelFunction());
@@ -59,11 +71,11 @@ if (string.IsNullOrEmpty(prompt))
     return;
 }
 
-prompt = "Send to phone number " + phoneNumber + " the following message via SMS: " + prompt + ". " +
-         "Only respond if the message was sent successfully or if there has been an error. " +
+prompt = "Send to phone number " + phoneNumber + " the following message via SMS: '" + prompt + "'. " +
+         "Respond if the message was sent successfully with message sent successfully or if not, try to get an error. " +
          "If there is an error, provide the error message with short human readable summary " +
          "and the whole exception as detail.";
 var result = await kernel.InvokePromptAsync(prompt, new(executionSettings));
 var mcpResponse = result.GetValue<string>();
 AnsiConsole.WriteLine("Response from MCP:");
-AnsiConsole.MarkupLine($"[green]{mcpResponse}[/]");
+AnsiConsole.WriteLine(mcpResponse);
